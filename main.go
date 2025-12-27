@@ -11,11 +11,27 @@ import (
 )
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Background(lipgloss.Color("#7D56F4")).Padding(0, 1)
-	infoStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#A0A0A0"))
-	dlStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true)
-	ulStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#3C8AFF")).Bold(true)
-	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	appStyle = lipgloss.NewStyle().Margin(1, 2)
+
+	titleStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFF")).
+		Background(lipgloss.Color("#5A42BC")).
+		Padding(0, 1).
+		Bold(true)
+
+	labelStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#767676")).
+		Width(12).
+		Render
+
+	dimStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#555555")).
+		Render
+
+	serverInfoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#D0D0D0")).Bold(true)
+	dlStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true)
+	ulStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#3C8AFF")).Bold(true)
+	errStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
 )
 
 type model struct {
@@ -38,14 +54,14 @@ func initialModel() model {
 	return model{
 		loading: true,
 		stage:   0,
-		spinner: "|",
+		spinner: "⠋",
 	}
 }
 
 func main() {
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Uh, se rompió todo: %v", err)
+		fmt.Printf("Fatal error: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -65,14 +81,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if m.stage < 3 {
 			switch m.spinner {
-			case "|":
-				m.spinner = "/"
-			case "/":
-				m.spinner = "-"
-			case "-":
-				m.spinner = "\\"
-			case "\\":
-				m.spinner = "|"
+			case "⠋":
+				m.spinner = "⠙"
+			case "⠙":
+				m.spinner = "⠹"
+			case "⠹":
+				m.spinner = "⠸"
+			case "⠸":
+				m.spinner = "⠼"
+			case "⠼":
+				m.spinner = "⠴"
+			case "⠴":
+				m.spinner = "⠦"
+			case "⠦":
+				m.spinner = "⠧"
+			case "⠧":
+				m.spinner = "⠇"
+			case "⠇":
+				m.spinner = "⠏"
+			case "⠏":
+				m.spinner = "⠋"
+			default:
+				m.spinner = "⠋"
 			}
 			return m, tickCmd()
 		}
@@ -103,31 +133,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	if m.err != nil {
-		return errStyle.Render(fmt.Sprintf("Error: %v", m.err))
+		return appStyle.Render(errStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 	}
 
-	s := "\n" + titleStyle.Render("🚀 SPEEDTEST") + "\n\n"
+	s := titleStyle.Render("SPEEDTEST") + "\n\n"
 
+	s += labelStyle("Server")
 	if m.stage >= 1 {
-		s += fmt.Sprintf("📡 Server: %s (%s)\n", m.server.Name, m.server.Country)
+		s += serverInfoStyle.Render(fmt.Sprintf("%s (%s)", m.server.Name, m.server.Country))
 	} else {
-		s += infoStyle.Render(fmt.Sprintf("%s Buscando el mejor servidor...", m.spinner)) + "\n"
+		s += dimStyle(fmt.Sprintf("%s Finding best server...", m.spinner))
 	}
+	s += "\n"
 
+	s += labelStyle("Download")
 	if m.stage > 1 {
-		s += fmt.Sprintf("⬇️  Bajada: %s\n", dlStyle.Render(fmt.Sprintf("%.2f Mbps", m.dlSpeed)))
+		mbps := (m.dlSpeed * 8) / 1000000.0
+		s += dlStyle.Render(fmt.Sprintf("%.2f Mbps", mbps))
 	} else if m.stage == 1 {
-		s += infoStyle.Render(fmt.Sprintf("%s Midiendo bajada...", m.spinner)) + "\n"
+		s += dimStyle(fmt.Sprintf("%s Testing download...", m.spinner))
+	} else {
+		s += dimStyle("...")
 	}
+	s += "\n"
 
+	s += labelStyle("Upload")
 	if m.stage > 2 {
-		s += fmt.Sprintf("⬆️  Subida: %s\n", ulStyle.Render(fmt.Sprintf("%.2f Mbps", m.ulSpeed)))
+		mbps := (m.ulSpeed * 8) / 1000000.0
+		s += ulStyle.Render(fmt.Sprintf("%.2f Mbps", mbps))
 	} else if m.stage == 2 {
-		s += infoStyle.Render(fmt.Sprintf("%s Midiendo subida...", m.spinner)) + "\n"
+		s += dimStyle(fmt.Sprintf("%s Testing upload...", m.spinner))
+	} else {
+		s += dimStyle("...")
+	}
+	s += "\n\n"
+
+	if m.loading {
+		s += dimStyle("Press 'q' to quit")
+	} else {
+		s += dimStyle("Done. Press 'q' to exit.")
 	}
 
-	s += "\n" + infoStyle.Render("(Presioná 'q' para salir)") + "\n"
-	return s
+	return appStyle.Render(s)
 }
 
 func findServerCmd() tea.Cmd {
@@ -136,19 +183,19 @@ func findServerCmd() tea.Cmd {
 
 		serverList, err := client.FetchServers()
 		if err != nil {
-			return errMsg(fmt.Errorf("error buscando servers: %v", err))
+			return errMsg(fmt.Errorf("error fetching servers: %v", err))
 		}
 
 		targets, err := serverList.FindServer([]int{})
 		if err != nil {
-			return errMsg(fmt.Errorf("error seleccionando server: %v", err))
+			return errMsg(fmt.Errorf("error selecting server: %v", err))
 		}
 
 		if len(targets) > 0 {
 			return serverMsg(targets[0])
 		}
 
-		return errMsg(fmt.Errorf("no se encontraron servidores"))
+		return errMsg(fmt.Errorf("no servers found"))
 	}
 }
 
@@ -167,7 +214,7 @@ func testUploadCmd(s *speedtest.Server) tea.Cmd {
 }
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*80, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
