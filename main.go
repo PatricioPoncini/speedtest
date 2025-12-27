@@ -11,33 +11,57 @@ import (
 )
 
 var (
-	appStyle = lipgloss.NewStyle().Margin(1, 2)
+	primaryColor = lipgloss.Color("#5A42BC")
+	subtleColor  = lipgloss.Color("#383838")
+	textColor    = lipgloss.Color("#FAFAFA")
+
+	boxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(subtleColor).
+			Padding(1, 2).
+			BorderTop(true).
+			BorderLeft(true).
+			BorderRight(true).
+			BorderBottom(true)
 
 	titleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFF")).
-		Background(lipgloss.Color("#5A42BC")).
-		Padding(0, 1).
-		Bold(true)
+			Foreground(textColor).
+			Background(primaryColor).
+			Padding(0, 1).
+			Bold(true).
+			MarginBottom(1)
 
 	labelStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#767676")).
-		Width(12).
-		Render
+			Foreground(lipgloss.Color("#767676")).
+			Width(10).
+			Render
+
+	dataStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#D0D0D0")).
+			Bold(true).
+			Render
 
 	dimStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#555555")).
-		Render
+			Foreground(lipgloss.Color("#555555")).
+			Render
 
-	serverInfoStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#D0D0D0")).Bold(true)
-	dlStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true)
-	ulStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("#3C8AFF")).Bold(true)
-	errStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
+	dlStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true)
+	ulStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#3C8AFF")).Bold(true)
+	pingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700")).Bold(true)
+
+	statusBarStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFF")).
+			Background(lipgloss.Color("#333")).
+			Padding(0, 1)
+
+	errStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
 )
 
 type model struct {
 	server  *speedtest.Server
 	dlSpeed float64
 	ulSpeed float64
+	ping    time.Duration
 	loading bool
 	stage   int
 	err     error
@@ -109,6 +133,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case serverMsg:
 		m.server = msg
+		m.ping = time.Duration(msg.Latency) * time.Millisecond
 		m.stage = 1
 		return m, testDownloadCmd(m.server)
 
@@ -133,48 +158,61 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	if m.err != nil {
-		return appStyle.Render(errStyle.Render(fmt.Sprintf("Error: %v", m.err)))
+		return boxStyle.Render(errStyle.Render(fmt.Sprintf("Error: %v", m.err)))
 	}
 
-	s := titleStyle.Render("SPEEDTEST") + "\n\n"
+	content := titleStyle.Render("NETWORK SPEEDTEST") + "\n\n"
 
-	s += labelStyle("Server")
+	content += labelStyle("Server")
 	if m.stage >= 1 {
-		s += serverInfoStyle.Render(fmt.Sprintf("%s (%s)", m.server.Name, m.server.Country))
+		content += dataStyle(fmt.Sprintf("%s, %s", m.server.Name, m.server.Country))
 	} else {
-		s += dimStyle(fmt.Sprintf("%s Finding best server...", m.spinner))
+		content += dimStyle(fmt.Sprintf("%s Finding best server...", m.spinner))
 	}
-	s += "\n"
+	content += "\n"
 
-	s += labelStyle("Download")
+	content += labelStyle("Ping")
+	if m.stage >= 1 {
+		content += pingStyle.Render(fmt.Sprintf("%d ms", m.server.Latency.Milliseconds()))
+	} else {
+		content += dimStyle("...")
+	}
+	content += "\n"
+
+	content += labelStyle("Download")
 	if m.stage > 1 {
 		mbps := (m.dlSpeed * 8) / 1000000.0
-		s += dlStyle.Render(fmt.Sprintf("%.2f Mbps", mbps))
+		content += dlStyle.Render(fmt.Sprintf("%.2f Mbps", mbps))
 	} else if m.stage == 1 {
-		s += dimStyle(fmt.Sprintf("%s Testing download...", m.spinner))
+		content += dimStyle(fmt.Sprintf("%s Testing...", m.spinner))
 	} else {
-		s += dimStyle("...")
+		content += dimStyle("...")
 	}
-	s += "\n"
+	content += "\n"
 
-	s += labelStyle("Upload")
+	content += labelStyle("Upload")
 	if m.stage > 2 {
 		mbps := (m.ulSpeed * 8) / 1000000.0
-		s += ulStyle.Render(fmt.Sprintf("%.2f Mbps", mbps))
+		content += ulStyle.Render(fmt.Sprintf("%.2f Mbps", mbps))
 	} else if m.stage == 2 {
-		s += dimStyle(fmt.Sprintf("%s Testing upload...", m.spinner))
+		content += dimStyle(fmt.Sprintf("%s Testing...", m.spinner))
 	} else {
-		s += dimStyle("...")
+		content += dimStyle("...")
 	}
-	s += "\n\n"
+	content += "\n"
 
+	ui := boxStyle.Render(content)
+
+	var statusText string
 	if m.loading {
-		s += dimStyle("Press 'q' to quit")
+		statusText = " Running tests... Press 'q' to cancel"
 	} else {
-		s += dimStyle("Done. Press 'q' to exit.")
+		statusText = " Done. Press 'q' to exit"
 	}
 
-	return appStyle.Render(s)
+	statusBar := statusBarStyle.Render(statusText)
+
+	return "\n" + ui + "\n" + statusBar
 }
 
 func findServerCmd() tea.Cmd {
