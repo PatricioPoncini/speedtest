@@ -26,13 +26,13 @@ This tool uses [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the 
 Follow these steps to install the tool and run it from anywhere in your terminal.
 
 ### `Prerequisites`
-Make sure you have **Go** installed on your system. You can download it [here](https://go.dev/dl/).
+Make sure you have Go installed on your system
 
-### Installation Steps (Linux/macOS)
+### `Installation Steps (Linux/macOS)`
 
 1. **Clone the repository and navigate to the folder:**
    ```bash
-   git clone [https://github.com/PatricioPoncini/speedtest.git](https://github.com/PatricioPoncini/speedtest.git)
+   git clone https://github.com/PatricioPoncini/speedtest.git
    cd speedtest
    ```
    
